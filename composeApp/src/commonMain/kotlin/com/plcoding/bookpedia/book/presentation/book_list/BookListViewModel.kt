@@ -13,7 +13,6 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
@@ -26,7 +25,7 @@ import kotlinx.coroutines.launch
 
 //Presentation -> Domain <- Data
 class BookListViewModel(
-    private val dataSource: BookRepository
+    private val bookRepository: BookRepository
 ): ViewModel() {
 
     private val _state = MutableStateFlow(BookListState())
@@ -35,6 +34,7 @@ class BookListViewModel(
             if(cachedBooks.isEmpty()){
                 observeSearchQuery()
             }
+            observeFavoriteBooks()
         }
         .stateIn(
             viewModelScope,
@@ -44,6 +44,7 @@ class BookListViewModel(
 
     private var cachedBooks = emptyList<Book>()
     private var searchJob: Job? = null
+    private var favoriteBookJob: Job? = null
 
     fun onAction(action: BookListAction){
         when(action){
@@ -65,6 +66,18 @@ class BookListViewModel(
                 }
             }
         }
+    }
+
+    private fun observeFavoriteBooks(){
+        favoriteBookJob?.cancel()
+        favoriteBookJob = bookRepository
+            .getFavoriteBooks()
+            .onEach { favoriteBooks ->
+                _state.update { it.copy(
+                    favoriteResults = favoriteBooks
+                ) }
+            }
+            .launchIn(viewModelScope)
     }
 
     private fun observeSearchQuery(){
@@ -93,7 +106,7 @@ class BookListViewModel(
             _state.update { it.copy(
                 isLoading = true
             ) }
-            dataSource
+            bookRepository
                 .searchBooks(query)
                 .onSuccess { searchResult ->
                     _state.update { it.copy(
